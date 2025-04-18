@@ -1,10 +1,13 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
 import Image from "next/image";
-import { cn } from "@/lib/utils";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+
+import { cn } from "@/lib/utils";
 import { vapi } from "@/lib/vapi.sdk";
+import { interviewer } from "@/constants";
+import { createFeedback } from "@/lib/actions/general.action";
 
 enum CallStatus {
 	INACTIVE = "INACTIVE",
@@ -14,22 +17,34 @@ enum CallStatus {
 }
 
 interface SavedMessage {
-	role: "user" | "assistant" | "system";
+	role: "user" | "system" | "assistant";
 	content: string;
 }
 
-const Agent = ({ username, userId, type }: AgentProps) => {
+const Agent = ({
+	userName,
+	userId,
+	interviewId,
+	feedbackId,
+	type,
+	questions,
+}: AgentProps) => {
 	const router = useRouter();
-
-	const [isSpeaking, setIsSpeaking] = useState(false);
 	const [callStatus, setCallStatus] = useState<CallStatus>(
 		CallStatus.INACTIVE
 	);
 	const [messages, setMessages] = useState<SavedMessage[]>([]);
+	const [isSpeaking, setIsSpeaking] = useState(false);
+	const [lastMessage, setLastMessage] = useState<string>("");
 
 	useEffect(() => {
-		const onCallStart = () => setCallStatus(CallStatus.ACTIVE);
-		const onCallEnd = () => setCallStatus(CallStatus.FINISHED);
+		const onCallStart = () => {
+			setCallStatus(CallStatus.ACTIVE);
+		};
+
+		const onCallEnd = () => {
+			setCallStatus(CallStatus.FINISHED);
+		};
 
 		const onMessage = (message: Message) => {
 			if (
@@ -40,15 +55,22 @@ const Agent = ({ username, userId, type }: AgentProps) => {
 					role: message.role,
 					content: message.transcript,
 				};
-				setMessages((prevMessages) => [...prevMessages, newMessage]);
+				setMessages((prev) => [...prev, newMessage]);
 			}
 		};
 
-		const onSpeechStart = () => setIsSpeaking(true);
-		const onSpeechEnd = () => setIsSpeaking(false);
+		const onSpeechStart = () => {
+			console.log("speech start");
+			setIsSpeaking(true);
+		};
+
+		const onSpeechEnd = () => {
+			console.log("speech end");
+			setIsSpeaking(false);
+		};
 
 		const onError = (error: Error) => {
-			console.error(error);
+			console.log("Error:", error);
 		};
 
 		vapi.on("call-start", onCallStart);
@@ -68,20 +90,55 @@ const Agent = ({ username, userId, type }: AgentProps) => {
 		};
 	}, []);
 
-	useEffect(() => {
-		if (callStatus === CallStatus.FINISHED) {
+	const handleGenerateFeedback = async () => {
+		const { success, feedbackId: id } = await createFeedback({
+			interviewId: interviewId!,
+			userId: userId!,
+			transcript: messages,
+		});
+
+		if (success && id) {
+			router.push(`/interview/${interviewId}/feedback`);
+		} else {
+			console.log("Error saving feedback");
 			router.push(`/`);
 		}
-	}, [callStatus, type, userId]);
+	};
+
+	useEffect(() => {
+		if (callStatus === CallStatus.FINISHED) {
+			if (type === "generate") {
+				router.push(`/`);
+			} else {
+				handleGenerateFeedback();
+			}
+		}
+	}, [callStatus, type, userId, interviewId]);
 
 	const handleCall = async () => {
 		setCallStatus(CallStatus.CONNECTING);
-		await vapi.start(process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID, {
-			variableValues: {
-				username: username,
-				userid: userId,
-			},
-		});
+
+		if (type === "generate") {
+			await vapi.start(process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID!, {
+				variableValues: {
+					username: userName,
+					userid: userId,
+				},
+			});
+		} else {
+			let formattedQuestions = "";
+			if (questions) {
+				formattedQuestions = questions
+					.map((question) => `- ${question}`)
+					.join("\n");
+			}
+
+			await vapi.start(interviewer, {
+				variableValues: {
+					questions: formattedQuestions,
+				},
+			});
+		}
 	};
 
 	const handleDisconnect = () => {
@@ -119,7 +176,7 @@ const Agent = ({ username, userId, type }: AgentProps) => {
 							height={540}
 							className="rounded-full object-cover size-[120px]"
 						/>
-						<h3>{username}</h3>
+						<h3>{userName}</h3>
 					</div>
 				</div>
 			</div>

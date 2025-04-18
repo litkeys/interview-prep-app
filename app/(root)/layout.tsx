@@ -12,12 +12,26 @@ const HomeLayout = async ({ children }: { children: ReactNode }) => {
 	}
 	return (
 		<div className="root-layout">
-			<nav>
-				<Link href="/" className="flex text-center gap-2">
-					<Image src="/logo.svg" alt="Logo" width={38} height={38} />
-					<h2 className="text-primary">PrepWise</h2>
-				</Link>
-			</nav>
+			<div className="flex flex-row justify-between items-center">
+				<nav>
+					<Link href="/" className="flex text-center gap-2">
+						<Image
+							src="/logo.svg"
+							alt="Logo"
+							width={38}
+							height={38}
+						/>
+						<h2 className="text-primary">PrepWise</h2>
+					</Link>
+				</nav>
+				<Image
+					src="/user-avatar.png"
+					alt="user avatar"
+					width={50}
+					height={50}
+					className="rounded-full object-cover"
+				/>
+			</div>
 			{children}
 		</div>
 	);
